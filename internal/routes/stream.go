@@ -34,11 +34,11 @@ func getStreamRoute(ctx *gin.Context) {
 		return
 	}
 
-	authHash := ctx.Query("hash")
+	/* authHash := ctx.Query("hash")
 	if authHash == "" {
 		http.Error(w, "missing hash param", http.StatusBadRequest)
 		return
-	}
+	} */
 
 	worker := bot.GetNextWorker()
 
@@ -48,7 +48,7 @@ func getStreamRoute(ctx *gin.Context) {
 		return
 	}
 
-	expectedHash := utils.PackFile(
+	/* expectedHash := utils.PackFile(
 		file.FileName,
 		file.FileSize,
 		file.MimeType,
@@ -57,7 +57,7 @@ func getStreamRoute(ctx *gin.Context) {
 	if !utils.CheckHash(authHash, expectedHash) {
 		http.Error(w, "invalid hash", http.StatusBadRequest)
 		return
-	}
+	} */
 
 	// for photo messages
 	if file.FileSize == 0 {
