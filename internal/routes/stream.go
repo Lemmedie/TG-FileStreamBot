@@ -121,10 +121,16 @@ func getStreamRoute(ctx *gin.Context) {
 		disposition = "attachment"
 	}
 
+	if ctx.Query("isProUser") == "true" {
+		isProUser = true
+	} else {
+		isProUser = false
+	}
+
 	ctx.Header("Content-Disposition", fmt.Sprintf("%s; filename=\"%s\"", disposition, file.FileName))
 
 	if r.Method != "HEAD" {
-		lr, _ := utils.NewTelegramReader(ctx, worker.Client, file.Location, start, end, contentLength)
+		lr, _ := utils.NewTelegramReader(ctx, worker.Client, file.Location, start, end, contentLength , isProUser)
 		if _, err := io.CopyN(w, lr, contentLength); err != nil {
 			log.Error("Error while copying stream", zap.Error(err))
 		}
