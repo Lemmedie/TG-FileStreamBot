@@ -120,12 +120,11 @@ func getStreamRoute(ctx *gin.Context) {
 	if ctx.Query("d") == "true" {
 		disposition = "attachment"
 	}
-
+	
+	isProUser := false
 	if ctx.Query("isProUser") == "true" {
-		isProUser := true
-	} else {
-		isProUser := false
-	}
+		isProUser = true
+	} 
 
 	ctx.Header("Content-Disposition", fmt.Sprintf("%s; filename=\"%s\"", disposition, file.FileName))
 
