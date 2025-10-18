@@ -84,6 +84,7 @@ func getStreamRoute(ctx *gin.Context) {
 	}
 
 	ctx.Header("Accept-Ranges", "bytes")
+	ctx.Header("Cache-Control","public, max-age=31536000, immutable")
 	var start, end int64
 	rangeHeader := r.Header.Get("Range")
 
