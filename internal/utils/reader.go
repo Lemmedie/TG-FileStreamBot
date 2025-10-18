@@ -36,8 +36,15 @@ func NewTelegramReader(
 	start int64,
 	end int64,
 	contentLength int64,
+	isProUser bool 
 ) (io.ReadCloser, error) {
 
+	if isProUser {
+		chunk_size = int64(1024 * 1024)
+	} else {
+		chunk_size = int64(128 * 1024)
+	}
+	
 	r := &telegramReader{
 		ctx:           ctx,
 		log:           Logger.Named("telegramReader"),
@@ -45,7 +52,7 @@ func NewTelegramReader(
 		client:        client,
 		start:         start,
 		end:           end,
-		chunkSize:     int64(1024 * 1024),
+		chunkSize:     chunk_size,
 		contentLength: contentLength,
 	}
 	r.log.Sugar().Debug("Start")
