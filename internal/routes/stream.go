@@ -131,7 +131,10 @@ func getStreamRoute(ctx *gin.Context) {
 	if r.Method != "HEAD" {
 		lr, _ := utils.NewTelegramReader(ctx, worker.Client, file.Location, start, end, contentLength , isProUser)
 		if _, err := io.CopyN(w, lr, contentLength); err != nil {
-			log.Error("Error while copying stream", zap.Error(err))
+			log.Error("Error while copying stream",
+			    zap.Int("worker_id", worker.ID),
+			    zap.Error(err),
+			)
 		}
 	}
 }
