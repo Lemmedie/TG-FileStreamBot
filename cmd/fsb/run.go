@@ -63,7 +63,7 @@ func getRouter(log *zap.Logger) *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	router := gin.Default()
-	router.Use(limits.MaxAllowed(8))
+	router.Use(limits.MaxConnections(8))
 	router.Use(gin.ErrorLogger())
 	router.GET("/", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, types.RootResponse{
