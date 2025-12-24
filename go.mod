@@ -5,7 +5,6 @@ go 1.21.3
 require (
 	github.com/celestix/gotgproto v1.0.0-beta18
 	github.com/gin-gonic/gin v1.9.1
-    github.com/mikeee/gin-limits v0.0.1
 	github.com/gotd/td v0.105.0
 	github.com/joho/godotenv v1.5.1
 	github.com/kelseyhightower/envconfig v1.4.0
