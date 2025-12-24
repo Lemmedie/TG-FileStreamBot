@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-    "github.com/aviddiviner/gin-limit"
 	"github.com/gin-gonic/gin"
+	limits "github.com/mikeee/gin-limits"
 	"go.uber.org/zap"
 )
 
@@ -63,7 +63,7 @@ func getRouter(log *zap.Logger) *gin.Engine {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	router := gin.Default()
-	router.Use(limit.MaxAllowed(8))
+	router.Use(limits.MaxAllowed(8))
 	router.Use(gin.ErrorLogger())
 	router.GET("/", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, types.RootResponse{
