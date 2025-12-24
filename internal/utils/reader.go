@@ -39,9 +39,9 @@ func NewTelegramReader(
 	isProUser bool,
 ) (io.ReadCloser, error) {
 	
-	chunk_size := int64(1024 * 1024)
+	chunk_size := int64(64 * 1024)
 	/* if isProUser {
-		chunk_size = int64(1024 * 1024)
+		chunk_size = int64(64 * 1024)
 	} */
 	
 	r := &telegramReader{
