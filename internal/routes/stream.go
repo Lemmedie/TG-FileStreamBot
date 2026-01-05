@@ -41,6 +41,10 @@ func getStreamRoute(ctx *gin.Context) {
 	} */
 
 	worker := bot.GetNextWorker()
+	if worker == nil {
+		http.Error(w, "no worker available", http.StatusServiceUnavailable)
+		return
+	}
 
 	file, err := utils.FileFromMessage(ctx, worker.Client, messageID)
 	if err != nil {
@@ -84,14 +88,15 @@ func getStreamRoute(ctx *gin.Context) {
 	}
 
 	ctx.Header("Accept-Ranges", "bytes")
-	ctx.Header("Cache-Control","public, max-age=31536000, immutable")
+	ctx.Header("Cache-Control", "public, max-age=31536000, immutable")
+
 	var start, end int64
 	rangeHeader := r.Header.Get("Range")
 
+	status := http.StatusOK
 	if rangeHeader == "" {
 		start = 0
 		end = file.FileSize - 1
-		w.WriteHeader(http.StatusOK)
 	} else {
 		ranges, err := range_parser.Parse(file.FileSize, r.Header.Get("Range"))
 		if err != nil {
@@ -102,7 +107,7 @@ func getStreamRoute(ctx *gin.Context) {
 		end = ranges[0].End
 		ctx.Header("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, file.FileSize))
 		log.Info("Content-Range", zap.Int64("start", start), zap.Int64("end", end), zap.Int64("fileSize", file.FileSize))
-		w.WriteHeader(http.StatusPartialContent)
+		status = http.StatusPartialContent
 	}
 
 	contentLength := end - start + 1
@@ -120,20 +125,34 @@ func getStreamRoute(ctx *gin.Context) {
 	if ctx.Query("d") == "true" {
 		disposition = "attachment"
 	}
-	
+
 	isProUser := false
 	if ctx.Query("isProUser") == "true" {
 		isProUser = true
-	} 
+	}
 
 	ctx.Header("Content-Disposition", fmt.Sprintf("%s; filename=\"%s\"", disposition, file.FileName))
 
+	// write status after headers are set so client receives correct metadata
+	w.WriteHeader(status)
+
 	if r.Method != "HEAD" {
-		lr, _ := utils.NewTelegramReader(ctx, worker.Client, file.Location, start, end, contentLength , isProUser)
-		if _, err := io.CopyN(w, lr, contentLength); err != nil {
+		lr, err := utils.NewTelegramReader(r.Context(), worker.Client, file.Location, start, end, contentLength, isProUser)
+		if err != nil {
+			log.Error("Failed to create telegram reader",
+				zap.Int("worker_id", worker.ID),
+				zap.Error(err),
+			)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer lr.Close()
+
+		buf := make([]byte, 32*1024)
+		if _, err := io.CopyBuffer(w, lr, buf); err != nil {
 			log.Error("Error while copying stream",
-			    zap.Int("worker_id", worker.ID),
-			    zap.Error(err),
+				zap.Int("worker_id", worker.ID),
+				zap.Error(err),
 			)
 		}
 	}

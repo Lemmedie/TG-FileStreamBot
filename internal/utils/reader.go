@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/tg"
@@ -21,8 +22,13 @@ type telegramReader struct {
 	buffer        []byte
 	bytesread     int64
 	chunkSize     int64
-	i             int64
+	i             int
 	contentLength int64
+	// prefetching
+	chunkChan chan []byte
+	errChan   chan error
+	cancel    context.CancelFunc
+	mu        sync.Mutex
 }
 
 func (*telegramReader) Close() error {
@@ -38,52 +44,102 @@ func NewTelegramReader(
 	contentLength int64,
 	isProUser bool,
 ) (io.ReadCloser, error) {
-	
-	chunk_size := int64(1024 * 1024)
+
+	chunkSize := int64(1024 * 1024)
 	/* if isProUser {
 		chunk_size = int64(64 * 1024)
 	} */
-	
+
+	cctx, cancel := context.WithCancel(ctx)
 	r := &telegramReader{
-		ctx:           ctx,
+		ctx:           cctx,
 		log:           Logger.Named("telegramReader"),
 		location:      location,
 		client:        client,
 		start:         start,
 		end:           end,
-		chunkSize:     chunk_size,
+		chunkSize:     chunkSize,
 		contentLength: contentLength,
+		chunkChan:     make(chan []byte, 2),
+		errChan:       make(chan error, 1),
+		cancel:        cancel,
 	}
 	r.log.Sugar().Debug("Start")
 	r.next = r.partStream()
+
+	// start background prefetcher
+	go func() {
+		defer close(r.chunkChan)
+		for {
+			select {
+			case <-r.ctx.Done():
+				return
+			default:
+			}
+			b, err := r.next()
+			if err != nil {
+				select {
+				case r.errChan <- err:
+				default:
+				}
+				return
+			}
+			if len(b) == 0 {
+				return
+			}
+			select {
+			case r.chunkChan <- b:
+			case <-r.ctx.Done():
+				return
+			}
+		}
+	}()
+
 	return r, nil
 }
 
 func (r *telegramReader) Read(p []byte) (n int, err error) {
-
-	if r.bytesread == r.contentLength {
-		r.log.Sugar().Debug("EOF (bytesread == contentLength)")
+	if r.contentLength > 0 && r.bytesread >= r.contentLength {
+		r.log.Sugar().Debug("EOF (bytesread >= contentLength)")
 		return 0, io.EOF
 	}
 
-	if r.i >= int64(len(r.buffer)) {
-		r.buffer, err = r.next()
-		r.log.Debug("Next Buffer", zap.Int64("len", int64(len(r.buffer))))
-		if err != nil {
-			return 0, err
-		}
-		if len(r.buffer) == 0 {
-			r.next = r.partStream()
-			r.buffer, err = r.next()
-			if err != nil {
-				return 0, err
+	if r.i >= len(r.buffer) {
+		// try to read from prefetch channel or error channel
+		select {
+		case b, ok := <-r.chunkChan:
+			if !ok {
+				return 0, io.EOF
 			}
-
+			r.buffer = b
+			r.log.Debug("Next Buffer (prefetched)", zap.Int("len", len(r.buffer)))
+			r.i = 0
+		case err := <-r.errChan:
+			return 0, err
+		case <-r.ctx.Done():
+			return 0, r.ctx.Err()
 		}
-		r.i = 0
 	}
-	n = copy(p, r.buffer[r.i:])
-	r.i += int64(n)
+	// Don't read past the declared content length if known
+	toCopy := len(p)
+	if r.contentLength > 0 {
+		remaining := r.contentLength - r.bytesread
+		if remaining <= 0 {
+			return 0, io.EOF
+		}
+		if int64(toCopy) > remaining {
+			toCopy = int(remaining)
+		}
+	}
+
+	// also don't copy more than what's in the buffer
+	avail := len(r.buffer) - r.i
+	if toCopy > avail {
+		toCopy = avail
+	}
+
+	n = copy(p, r.buffer[r.i:r.i+toCopy])
+	r.i += n
 	r.bytesread += int64(n)
 	return n, nil
 }
@@ -106,7 +162,7 @@ func (r *telegramReader) chunk(offset int64, limit int64) ([]byte, error) {
 	case *tg.UploadFile:
 		return result.Bytes, nil
 	default:
-		return nil, fmt.Errorf("unexpected type %T", r)
+		return nil, fmt.Errorf("unexpected type %T", result)
 	}
 }
 
@@ -116,8 +172,8 @@ func (r *telegramReader) partStream() func() ([]byte, error) {
 	end := r.end
 	offset := start - (start % r.chunkSize)
 
-	firstPartCut := start - offset
-	lastPartCut := (end % r.chunkSize) + 1
+	firstPartCut := int(start - offset)
+	lastPartCut := int((end % r.chunkSize) + 1)
 	partCount := int((end - offset + r.chunkSize) / r.chunkSize)
 	currentPart := 1
 
@@ -139,9 +195,9 @@ func (r *telegramReader) partStream() func() ([]byte, error) {
 			res = res[:lastPartCut]
 		}
 
+		r.log.Sugar().Debugf("Part %d/%d", currentPart, partCount)
 		currentPart++
 		offset += r.chunkSize
-		r.log.Sugar().Debugf("Part %d/%d", currentPart, partCount)
 		return res, nil
 	}
 	return readData

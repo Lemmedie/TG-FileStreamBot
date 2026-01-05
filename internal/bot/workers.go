@@ -85,6 +85,12 @@ func (w *BotWorkers) Add(token string) (err error) {
 func GetNextWorker() *Worker {
 	Workers.mut.Lock()
 	defer Workers.mut.Unlock()
+	if len(Workers.Bots) == 0 {
+		if Workers.log != nil {
+			Workers.log.Sugar().Error("No workers available")
+		}
+		return nil
+	}
 	index := (Workers.index + 1) % len(Workers.Bots)
 	Workers.index = index
 	worker := Workers.Bots[index]
