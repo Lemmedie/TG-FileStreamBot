@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/celestix/gotgproto"
 	"github.com/gotd/td/tg"
@@ -146,24 +147,47 @@ func (r *telegramReader) Read(p []byte) (n int, err error) {
 
 func (r *telegramReader) chunk(offset int64, limit int64) ([]byte, error) {
 
-	req := &tg.UploadGetFileRequest{
-		Offset:   offset,
-		Limit:    int(limit),
-		Location: r.location,
+	// retry parameters
+	maxRetries := 3
+	backoff := 500 * time.Millisecond
+
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		// per-request timeout to avoid hanging forever
+		reqCtx, cancel := context.WithTimeout(r.ctx, 30*time.Second)
+		req := &tg.UploadGetFileRequest{
+			Offset:   offset,
+			Limit:    int(limit),
+			Location: r.location,
+		}
+
+		res, err := r.client.API().UploadGetFile(reqCtx, req)
+		cancel()
+		if err == nil {
+			switch result := res.(type) {
+			case *tg.UploadFile:
+				return result.Bytes, nil
+			default:
+				return nil, fmt.Errorf("unexpected type %T", result)
+			}
+		}
+
+		lastErr = err
+		r.log.Sugar().Warnf("chunk request failed (attempt %d/%d): %v", attempt+1, maxRetries, err)
+
+		// if context canceled, break early
+		select {
+		case <-r.ctx.Done():
+			return nil, r.ctx.Err()
+		default:
+		}
+
+		// backoff before retrying
+		time.Sleep(backoff)
+		backoff *= 2
 	}
 
-	res, err := r.client.API().UploadGetFile(r.ctx, req)
-
-	if err != nil {
-		return nil, err
-	}
-
-	switch result := res.(type) {
-	case *tg.UploadFile:
-		return result.Bytes, nil
-	default:
-		return nil, fmt.Errorf("unexpected type %T", result)
-	}
+	return nil, lastErr
 }
 
 func (r *telegramReader) partStream() func() ([]byte, error) {
