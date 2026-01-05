@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"sync"
-
 	"github.com/coocood/freecache"
 	"github.com/gotd/td/tg"
 	"go.uber.org/zap"
