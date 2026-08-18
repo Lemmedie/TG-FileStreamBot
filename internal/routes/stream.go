@@ -1,9 +1,9 @@
 package routes
 
 import (
-	"EverythingSuckz/fsb/internal/bot"
-	"EverythingSuckz/fsb/internal/utils",
 	"EverythingSuckz/fsb/config"
+	"EverythingSuckz/fsb/internal/bot"
+	"EverythingSuckz/fsb/internal/utils"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/gotd/td/tg"
 	range_parser "github.com/quantumsheep/range-parser"
-	"github.com/speps/go-hashids/v2" 
+	"github.com/speps/go-hashids/v2"
 	"go.uber.org/zap"
 
 	"github.com/gin-gonic/gin"
@@ -19,14 +19,13 @@ import (
 
 var log *zap.Logger
 
-
 func (e *allRoutes) LoadHome(r *Route) {
 	log = e.log.Named("Stream")
 	defer log.Info("Loaded stream routes")
-	
+
 	// روتر قدیمی
 	r.Engine.GET("/stream/:messageID", getStreamRoute)
-	
+
 	r.Engine.GET("/:file_id/:filename", getFileByHashRoute)
 }
 
@@ -48,8 +47,8 @@ func getFileByHashRoute(ctx *gin.Context) {
 	filenameParam := ctx.Param("filename")
 
 	hd := hashids.NewData()
-	hd.Salt = config.valueOf.hash_salt
-	hd.MinLength = config.valueOf.hash_min_length
+	hd.Salt = config.ValueOf.HASHSALT
+	hd.MinLength = config.ValueOf.HASH_MIN_LEN
 	h, err := hashids.NewWithData(hd)
 	if err != nil {
 		http.Error(ctx.Writer, "Internal Server Error: HashID setup failed", http.StatusInternalServerError)
@@ -162,7 +161,7 @@ func serveTelegramFile(ctx *gin.Context, messageID int, expectedFilename string)
 
 	if r.Method != "HEAD" {
 		// نکته: متغیر isProUser در کدهای شما گلوبال فرض شده است
-		lr, err := utils.NewTelegramReader(r.Context(), worker.Client, file.Location, start, end, contentLength, isProUser)
+		lr, err := utils.NewTelegramReader(r.Context(), worker.Client, file.Location, start, end, contentLength)
 		if err != nil {
 			log.Error("Failed to create telegram reader",
 				zap.Int("worker_id", worker.ID),

@@ -43,7 +43,6 @@ func NewTelegramReader(
 	start int64,
 	end int64,
 	contentLength int64,
-	isProUser bool,
 ) (io.ReadCloser, error) {
 
 	chunkSize := int64(1024 * 1024)

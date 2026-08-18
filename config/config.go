@@ -50,6 +50,8 @@ type config struct {
 	UserSession    string       `envconfig:"USER_SESSION"`
 	UsePublicIP    bool         `envconfig:"USE_PUBLIC_IP" default:"false"`
 	AllowedUsers   allowedUsers `envconfig:"ALLOWED_USERS"`
+	HASHSALT       string       `envconfig:"HASHSALT"`
+	HASH_MIN_LEN   int          `envconfig:"HASH_MIN_LEN"`
 	MultiTokens    []string
 }
 
@@ -77,8 +79,8 @@ func SetFlagsFromConfig(cmd *cobra.Command) {
 	cmd.Flags().String("bot-token", ValueOf.BotToken, "Telegram Bot Token")
 	cmd.Flags().Int64("log-channel", ValueOf.LogChannelID, "Telegram Log Channel ID")
 	cmd.Flags().Bool("dev", ValueOf.Dev, "Enable development mode")
-	cmd.Flags().String("hash_salt",ValueOf.hash_salt , "HASHID SALT")
-	cmd.Flags().intP("hash_min_length",ValueOf.hash_min_length,"HAHSID MIN LENGTH")
+	cmd.Flags().String("hash_salt", ValueOf.HASHSALT, "HASHID SALT")
+	cmd.Flags().Int("hash_min_length", ValueOf.HASH_MIN_LEN, "HAHSID MIN LENGTH")
 	cmd.Flags().IntP("port", "p", ValueOf.Port, "Server port")
 	cmd.Flags().String("host", ValueOf.Host, "Server host that will be included in links")
 	cmd.Flags().Int("hash-length", ValueOf.HashLength, "Hash length in links")
