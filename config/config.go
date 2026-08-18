@@ -51,6 +51,7 @@ type config struct {
 	UsePublicIP    bool         `envconfig:"USE_PUBLIC_IP" default:"false"`
 	AllowedUsers   allowedUsers `envconfig:"ALLOWED_USERS"`
 	HASHSALT       string       `envconfig:"HASHSALT"`
+	HASH_ALPHABET  string       `envcongi:"HASH_ALPHABET"`
 	HASH_MIN_LEN   int          `envconfig:"HASH_MIN_LEN"`
 	MultiTokens    []string
 }
@@ -84,6 +85,7 @@ func SetFlagsFromConfig(cmd *cobra.Command) {
 	cmd.Flags().IntP("port", "p", ValueOf.Port, "Server port")
 	cmd.Flags().String("host", ValueOf.Host, "Server host that will be included in links")
 	cmd.Flags().Int("hash-length", ValueOf.HashLength, "Hash length in links")
+	cmd.Flags().String("hash-alphabet", ValueOf.HASH_ALPHABET, "Hash alphabet")
 	cmd.Flags().Bool("use-session-file", ValueOf.UseSessionFile, "Use session files")
 	cmd.Flags().String("user-session", ValueOf.UserSession, "Pyrogram user session")
 	cmd.Flags().Bool("use-public-ip", ValueOf.UsePublicIP, "Use public IP instead of local IP")

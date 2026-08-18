@@ -49,6 +49,8 @@ func getFileByHashRoute(ctx *gin.Context) {
 	hd := hashids.NewData()
 	hd.Salt = config.ValueOf.HASHSALT
 	hd.MinLength = config.ValueOf.HASH_MIN_LEN
+	hd.Alphabet = config.ValueOf.HASH_ALPHABET
+
 	h, err := hashids.NewWithData(hd)
 	if err != nil {
 		http.Error(ctx.Writer, "Internal Server Error: HashID setup failed", http.StatusInternalServerError)
