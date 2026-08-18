@@ -2,7 +2,8 @@ package routes
 
 import (
 	"EverythingSuckz/fsb/internal/bot"
-	"EverythingSuckz/fsb/internal/utils"
+	"EverythingSuckz/fsb/internal/utils",
+	"EverythingSuckz/fsb/config"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/gotd/td/tg"
 	range_parser "github.com/quantumsheep/range-parser"
+	"github.com/speps/go-hashids/v2" 
 	"go.uber.org/zap"
 
 	"github.com/gin-gonic/gin"
@@ -17,28 +19,60 @@ import (
 
 var log *zap.Logger
 
+
 func (e *allRoutes) LoadHome(r *Route) {
 	log = e.log.Named("Stream")
-	defer log.Info("Loaded stream route")
+	defer log.Info("Loaded stream routes")
+	
+	// روتر قدیمی
 	r.Engine.GET("/stream/:messageID", getStreamRoute)
+	
+	r.Engine.GET("/:file_id/:filename", getFileByHashRoute)
 }
 
+// هندلر روتر قدیمی
 func getStreamRoute(ctx *gin.Context) {
-	w := ctx.Writer
-	r := ctx.Request
-
 	messageIDParm := ctx.Param("messageID")
 	messageID, err := strconv.Atoi(messageIDParm)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(ctx.Writer, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	/* authHash := ctx.Query("hash")
-	if authHash == "" {
-		http.Error(w, "missing hash param", http.StatusBadRequest)
+	serveTelegramFile(ctx, messageID, "")
+}
+
+// هندلر روتر جدید با HashID
+func getFileByHashRoute(ctx *gin.Context) {
+	hashIDParam := ctx.Param("file_id")
+	filenameParam := ctx.Param("filename")
+
+	hd := hashids.NewData()
+	hd.Salt = config.valueOf.hash_salt
+	hd.MinLength = config.valueOf.hash_min_length
+	h, err := hashids.NewWithData(hd)
+	if err != nil {
+		http.Error(ctx.Writer, "Internal Server Error: HashID setup failed", http.StatusInternalServerError)
 		return
-	} */
+	}
+
+	// 2. دیکد کردن HashID به عدد
+	numbers, err := h.DecodeWithError(hashIDParam)
+	if err != nil || len(numbers) == 0 {
+		http.Error(ctx.Writer, "Invalid file_id", http.StatusBadRequest)
+		return
+	}
+
+	messageID := int(numbers[0])
+
+	// 3. ارسال به تابع استریم و درخواست برای بررسی تطابق نام فایل
+	serveTelegramFile(ctx, messageID, filenameParam)
+}
+
+// تابع مشترک برای استریم فایل
+func serveTelegramFile(ctx *gin.Context, messageID int, expectedFilename string) {
+	w := ctx.Writer
+	r := ctx.Request
 
 	worker := bot.GetNextWorker()
 	if worker == nil {
@@ -52,16 +86,12 @@ func getStreamRoute(ctx *gin.Context) {
 		return
 	}
 
-	/* expectedHash := utils.PackFile(
-		file.FileName,
-		file.FileSize,
-		file.MimeType,
-		file.ID,
-	)
-	if !utils.CheckHash(authHash, expectedHash) {
-		http.Error(w, "invalid hash", http.StatusBadRequest)
+	// --- بخش جدید: بررسی نام فایل در صورتی که روتر جدید صدا زده شده باشد ---
+	if expectedFilename != "" && file.FileName != expectedFilename {
+		http.Error(w, "File not found or filename mismatch", http.StatusNotFound)
 		return
-	} */
+	}
+	// ------------------------------------------------------------------------
 
 	// for photo messages
 	if file.FileSize == 0 {
@@ -126,17 +156,12 @@ func getStreamRoute(ctx *gin.Context) {
 		disposition = "attachment"
 	}
 
-	isProUser := false
-	if ctx.Query("isProUser") == "true" {
-		isProUser = true
-	}
-
 	ctx.Header("Content-Disposition", fmt.Sprintf("%s; filename=\"%s\"", disposition, file.FileName))
 
-	// write status after headers are set so client receives correct metadata
 	w.WriteHeader(status)
 
 	if r.Method != "HEAD" {
+		// نکته: متغیر isProUser در کدهای شما گلوبال فرض شده است
 		lr, err := utils.NewTelegramReader(r.Context(), worker.Client, file.Location, start, end, contentLength, isProUser)
 		if err != nil {
 			log.Error("Failed to create telegram reader",
